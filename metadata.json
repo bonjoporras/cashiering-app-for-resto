@@ -1,0 +1,5 @@
+{
+  "name": "Resto cashiering app",
+  "description": "A modern, AI-enhanced restaurant cashiering application. Features a smart menu with category filtering, a dynamic cart system, and Gemini-powered upsell recommendations and receipt generation.",
+  "requestFramePermissions": []
+}
