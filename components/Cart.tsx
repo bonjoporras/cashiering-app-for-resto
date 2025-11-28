@@ -11,6 +11,8 @@ interface CartProps {
   onCheckout: () => void;
   discountValue: number;
   setDiscountValue: (value: number) => void;
+  discountType?: 'percent' | 'fixed';
+  setDiscountType?: (type: 'percent' | 'fixed') => void;
   customerName: string;
   isEditing?: boolean;
   isFullscreen?: boolean;
@@ -24,6 +26,8 @@ export const Cart: React.FC<CartProps> = ({
   onCheckout,
   discountValue,
   setDiscountValue,
+  discountType = 'fixed',
+  setDiscountType,
   customerName,
   isEditing = false,
   isFullscreen = false,
@@ -33,9 +37,16 @@ export const Cart: React.FC<CartProps> = ({
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // Discount is always fixed amount (Peso) now
-  const effectiveDiscountValue = Math.max(0, discountValue);
-  const finalDiscount = Math.min(effectiveDiscountValue, subtotal);
+  // Calculate Discount Amount
+  let discountAmount = 0;
+  if (discountType === 'percent') {
+    discountAmount = subtotal * (discountValue / 100);
+  } else {
+    discountAmount = discountValue;
+  }
+  
+  // Cap Discount
+  const finalDiscount = Math.min(Math.max(0, discountAmount), subtotal);
   const total = Math.max(0, subtotal - finalDiscount);
 
   const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,7 +90,6 @@ export const Cart: React.FC<CartProps> = ({
       </div>
 
       {/* Cart Items List - 2 Column Grid with List-Style Cards */}
-      {/* Apply dir="rtl" to move scrollbar to left, then dir="ltr" inside to fix text direction */}
       <div 
         className={`flex-1 p-2 ${enableScroll ? 'overflow-y-auto' : 'overflow-y-hidden'}`}
         dir={enableScroll ? "rtl" : "ltr"}
@@ -160,7 +170,21 @@ export const Cart: React.FC<CartProps> = ({
         
         {/* Discount Section */}
         <div className="flex items-center justify-between mb-1 pb-2 border-b border-slate-200 dark:border-slate-600">
-          <span className="text-slate-600 dark:text-slate-400 text-sm font-medium">Discount (₱)</span>
+          <div className="flex items-center gap-2">
+              <span className="text-slate-600 dark:text-slate-400 text-sm font-medium">Discount</span>
+              {setDiscountType && (
+                <div className="flex bg-slate-200 dark:bg-slate-600 rounded p-0.5">
+                   <button 
+                     onClick={() => setDiscountType('fixed')}
+                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${discountType === 'fixed' ? 'bg-white dark:bg-slate-800 shadow text-brand-600' : 'text-slate-500 dark:text-slate-400'}`}
+                   >₱</button>
+                   <button 
+                     onClick={() => setDiscountType('percent')}
+                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${discountType === 'percent' ? 'bg-white dark:bg-slate-800 shadow text-brand-600' : 'text-slate-500 dark:text-slate-400'}`}
+                   >%</button>
+                </div>
+              )}
+          </div>
           <div className="flex items-center gap-2">
             <div className="relative">
               <input 
@@ -168,11 +192,11 @@ export const Cart: React.FC<CartProps> = ({
                   min="0"
                   value={discountValue || ''} 
                   onChange={handleDiscountChange}
-                  className="w-20 px-2 py-1 text-right text-sm font-bold border border-slate-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-800 dark:text-white pr-4"
+                  className="w-20 px-2 py-1 text-right text-sm font-bold border border-slate-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-800 dark:text-white pr-5"
                   placeholder="0"
               />
-              <span className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium pointer-events-none">
-                  ₱
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
+                  {discountType === 'percent' ? '%' : '₱'}
               </span>
             </div>
           </div>
@@ -185,7 +209,7 @@ export const Cart: React.FC<CartProps> = ({
         
         {finalDiscount > 0 && (
           <div className="flex justify-between text-brand-600 dark:text-brand-400 text-sm font-medium">
-            <span>Discount</span>
+            <span>Discount {discountType === 'percent' ? `(${discountValue}%)` : ''}</span>
             <span>-₱{finalDiscount.toFixed(2)}</span>
           </div>
         )}

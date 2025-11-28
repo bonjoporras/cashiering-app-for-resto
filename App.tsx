@@ -233,6 +233,11 @@ const App: React.FC = () => {
     handleUpdateCustomer(selectedCustomer.id, { discountValue: val });
   };
 
+  const handleDiscountTypeChange = (type: 'percent' | 'fixed') => {
+    if (!selectedCustomer) return;
+    handleUpdateCustomer(selectedCustomer.id, { discountType: type });
+  };
+
   // Checkout
   const handleCheckout = () => {
     if (!selectedCustomer || selectedCustomer.cart.length === 0) return;
@@ -242,9 +247,18 @@ const App: React.FC = () => {
   const handlePaymentConfirmed = () => {
     if (!selectedCustomer) return;
     
-    // Calculate totals
+    // Calculate totals with correct discount logic
     const subtotal = selectedCustomer.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const discount = Math.min(selectedCustomer.discountValue, subtotal);
+    
+    let discount = 0;
+    if (selectedCustomer.discountType === 'percent') {
+        discount = subtotal * (selectedCustomer.discountValue / 100);
+    } else {
+        discount = selectedCustomer.discountValue;
+    }
+    // Ensure discount doesn't exceed subtotal
+    discount = Math.min(discount, subtotal);
+    
     const total = subtotal - discount;
 
     let updatedOrders: Order[];
@@ -288,8 +302,6 @@ const App: React.FC = () => {
     }
 
     // Update Customer (points, clear cart)
-    // We calculate points for the *current* total. 
-    // In edit mode, this might double count if we don't subtract old points, but for simplicity we add new points.
     const newPoints = selectedCustomer.loyaltyPoints + Math.floor(total / 100);
     
     // Instead of deleting the customer, we just clear their cart and update points.
@@ -458,8 +470,19 @@ const App: React.FC = () => {
   
   // Calculate totals for payment modal
   const cartSubtotal = currentCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const cartDiscount = selectedCustomer ? Math.min(selectedCustomer.discountValue, cartSubtotal) : 0;
-  const cartTotal = cartSubtotal - cartDiscount;
+  
+  // Calculate Discount Amount based on Type
+  let cartDiscountAmount = 0;
+  if (selectedCustomer) {
+      if (selectedCustomer.discountType === 'percent') {
+          cartDiscountAmount = cartSubtotal * (selectedCustomer.discountValue / 100);
+      } else {
+          cartDiscountAmount = selectedCustomer.discountValue;
+      }
+      cartDiscountAmount = Math.min(cartDiscountAmount, cartSubtotal);
+  }
+  
+  const cartTotal = cartSubtotal - cartDiscountAmount;
 
   return (
     <div className="flex h-screen bg-slate-100 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-300 print:h-auto print:overflow-visible">
@@ -665,6 +688,8 @@ const App: React.FC = () => {
              onCheckout={handleCheckout}
              discountValue={selectedCustomer?.discountValue || 0}
              setDiscountValue={handleDiscountChange}
+             discountType={selectedCustomer?.discountType || 'fixed'}
+             setDiscountType={handleDiscountTypeChange}
              customerName={selectedCustomer?.name || 'Select Customer'}
              isEditing={!!selectedCustomer?.editingOrderId}
              isFullscreen={isFullscreen}
@@ -677,6 +702,13 @@ const App: React.FC = () => {
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
         total={cartTotal}
+        subtotal={cartSubtotal}
+        discountType={selectedCustomer?.discountType || 'fixed'}
+        discountValue={selectedCustomer?.discountValue || 0}
+        onUpdateDiscount={(type, value) => {
+            if (!selectedCustomer) return;
+            handleUpdateCustomer(selectedCustomer.id, { discountType: type, discountValue: value });
+        }}
         cartItems={currentCart}
         customerName={selectedCustomer?.name || 'Guest'}
         onConfirmPayment={handlePaymentConfirmed}

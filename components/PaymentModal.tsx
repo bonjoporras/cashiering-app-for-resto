@@ -7,6 +7,10 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
+  subtotal: number;
+  discountType: 'percent' | 'fixed';
+  discountValue: number;
+  onUpdateDiscount: (type: 'percent' | 'fixed', value: number) => void;
   cartItems: CartItem[];
   customerName: string;
   onConfirmPayment: () => void;
@@ -17,6 +21,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
   total,
+  subtotal,
+  discountType,
+  discountValue,
+  onUpdateDiscount,
   cartItems,
   customerName,
   onConfirmPayment,
@@ -45,6 +53,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const sanitizedCustomer = customerName.replace(/[^a-z0-9]/gi, '_');
     const filename = `Receipt-${sanitizedCustomer}-${dateFilename}-${timeFilename}.txt`;
 
+    let discountAmount = 0;
+    if (discountType === 'percent') {
+        discountAmount = subtotal * (discountValue / 100);
+    } else {
+        discountAmount = discountValue;
+    }
+
     let content = `${settings.appName.toUpperCase()}\n`;
     content += `ORDER SUMMARY\n`;
     content += `${line}\n`;
@@ -58,11 +73,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     });
 
     content += `${line}\n`;
+    content += `Subtotal: ${subtotal.toFixed(2)}\n`;
+    if (discountValue > 0) {
+        content += `Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'}): -${discountAmount.toFixed(2)}\n`;
+    }
     content += `TOTAL: ${total.toFixed(2)}\n`;
     content += `${line}\n`;
 
     // 1. Trigger Save/Download
-    // Using File System Access API if available to allow saving to specific drive (e.g., USB E:\Receipts)
     try {
         if ('showSaveFilePicker' in window) {
             const opts = {
@@ -81,7 +99,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             // @ts-ignore
             await writable.close();
         } else {
-            // Fallback for browsers that don't support File System Access API
             const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -150,6 +167,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         `).join('')}
                     </div>
 
+                    <div class="border-bottom">
+                         <div class="flex-between">
+                            <span>Subtotal</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                         </div>
+                         ${discountValue > 0 ? `
+                         <div class="flex-between">
+                            <span>Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'})</span>
+                            <span>-${discountAmount.toFixed(2)}</span>
+                         </div>
+                         ` : ''}
+                    </div>
+
                     <div class="border-bottom bold">
                          <div class="flex-between" style="font-size: 14px;">
                             <span>TOTAL</span>
@@ -177,6 +207,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const handlePrintReceipt = () => {
     const received = parseFloat(cashReceived) || 0;
     const changeAmount = received - total;
+
+    let discountAmount = 0;
+    if (discountType === 'percent') {
+        discountAmount = subtotal * (discountValue / 100);
+    } else {
+        discountAmount = discountValue;
+    }
 
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
@@ -231,6 +268,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 </div>
                             </div>
                         `).join('')}
+                    </div>
+                    
+                    <div class="border-bottom">
+                         <div class="flex-between">
+                            <span>Subtotal</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                         </div>
+                         ${discountValue > 0 ? `
+                         <div class="flex-between">
+                            <span>Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'})</span>
+                            <span>-${discountAmount.toFixed(2)}</span>
+                         </div>
+                         ` : ''}
                     </div>
 
                     <div class="border-bottom bold">
@@ -385,7 +435,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       </div>
                    </div>
 
-                   <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[300px] scrollbar-hide">
+                   <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[220px] scrollbar-hide">
                       {cartItems.map((item) => (
                           <div key={item.id} className="flex justify-between items-start text-sm">
                               <div>
@@ -396,9 +446,48 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                           </div>
                       ))}
                    </div>
-                   <div className="border-t border-slate-200 dark:border-slate-600 mt-4 pt-3 flex justify-between items-center">
-                      <span className="font-bold text-slate-700 dark:text-slate-300">Total Amount</span>
-                      <span className="font-bold text-xl text-slate-900 dark:text-white">₱{total.toFixed(2)}</span>
+                   
+                   {/* Discount Controls */}
+                   <div className="border-t border-slate-200 dark:border-slate-600 mt-auto pt-3 space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
+                            <span className="font-medium text-slate-800 dark:text-white">₱{subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2">
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Discount</span>
+                                <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5 border border-slate-200 dark:border-slate-600">
+                                    <button 
+                                    onClick={() => onUpdateDiscount('fixed', discountValue)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${discountType === 'fixed' ? 'bg-white dark:bg-slate-600 shadow-sm text-brand-600 dark:text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                                    >₱</button>
+                                    <button 
+                                    onClick={() => onUpdateDiscount('percent', discountValue)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${discountType === 'percent' ? 'bg-white dark:bg-slate-600 shadow-sm text-brand-600 dark:text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                                    >%</button>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                {discountType === 'fixed' && <span className="text-xs text-slate-400 font-bold">₱</span>}
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    value={discountValue || ''} 
+                                    onChange={(e) => onUpdateDiscount(discountType, parseFloat(e.target.value) || 0)}
+                                    className="w-20 text-right bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm font-bold focus:ring-1 focus:ring-brand-500 outline-none dark:text-white"
+                                    placeholder="0"
+                                />
+                                {discountType === 'percent' && <span className="text-xs text-slate-400 font-bold">%</span>}
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-red-500 font-bold">
+                            <span>- {discountType === 'percent' ? `${discountValue}%` : 'Discount'}</span>
+                            <span>(₱{(subtotal - total).toFixed(2)})</span>
+                        </div>
+                        <div className="flex justify-between items-center border-t border-dashed border-slate-300 dark:border-slate-600 pt-2 mt-2">
+                            <span className="font-bold text-slate-700 dark:text-slate-300">Total Amount</span>
+                            <span className="font-bold text-xl text-slate-900 dark:text-white">₱{total.toFixed(2)}</span>
+                        </div>
                    </div>
                 </div>
 
