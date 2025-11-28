@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Customer, AppSettings } from '../types';
 import { Plus, Users, ShoppingBag, Edit2, Trash2, UtensilsCrossed, Search } from 'lucide-react';
@@ -10,6 +11,7 @@ interface CustomerSidebarProps {
   onUpdateCustomer: (id: string, updates: Partial<Customer>) => void;
   onDeleteCustomer: (id: string) => void;
   settings: AppSettings;
+  isFullscreen?: boolean;
 }
 
 export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
@@ -20,6 +22,7 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
   onUpdateCustomer,
   onDeleteCustomer,
   settings,
+  isFullscreen = false,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,7 +79,7 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
                 placeholder="Search customers..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all placeholder:text-slate-400"
+                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all placeholder:text-slate-400"
              />
           </div>
        </div>
@@ -138,29 +141,29 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
                              )}
                         </div>
 
-                         <div className={`flex items-center gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingId(customer.id);
-                                  if (!isSelected) onSelectCustomer(customer);
-                                }}
-                                className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-all shrink-0 ${isSelected ? 'text-brand-400 hover:text-brand-600' : 'text-slate-300 hover:text-slate-500'}`}
-                                title="Edit Name"
-                            >
-                                <Edit2 size={10} />
-                            </button>
-                            <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteConfirmId(customer.id);
-                                }}
-                                className={`p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-all shrink-0 ${isSelected ? 'text-red-300 hover:text-red-600' : 'text-slate-300 hover:text-red-500'}`}
-                                title="Remove Customer"
-                            >
-                                <Trash2 size={10} />
-                            </button>
-                         </div>
+                        <div className={`flex items-center gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                          <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(customer.id);
+                                if (!isSelected) onSelectCustomer(customer);
+                              }}
+                              className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-all shrink-0 ${isSelected ? 'text-brand-400 hover:text-brand-600' : 'text-slate-300 hover:text-slate-500'}`}
+                              title="Edit Name"
+                          >
+                              <Edit2 size={10} />
+                          </button>
+                          <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmId(customer.id);
+                              }}
+                              className={`p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-all shrink-0 ${isSelected ? 'text-red-300 hover:text-red-600' : 'text-slate-300 hover:text-red-500'}`}
+                              title="Remove Customer"
+                          >
+                              <Trash2 size={10} />
+                          </button>
+                       </div>
                      </div>
                      
                      {cartItemCount > 0 && (

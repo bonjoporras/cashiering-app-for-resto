@@ -20,7 +20,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<'general' | 'database'>('general');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
+  
   if (!isOpen) return null;
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,16 +72,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-100 dark:border-slate-700">
+        <div className="flex border-b border-slate-100 dark:border-slate-700 overflow-x-auto">
            <button 
              onClick={() => setActiveTab('general')}
-             className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'general' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+             className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap px-4 ${activeTab === 'general' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
            >
              General
            </button>
            <button 
              onClick={() => setActiveTab('database')}
-             className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'database' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+             className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap px-4 ${activeTab === 'database' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
            >
              Database
            </button>
@@ -206,7 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Operations</label>
                    
                    <button 
-                     onClick={exportAllData}
+                     onClick={() => exportAllData('ManualBackup')}
                      className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-brand-500 hover:shadow-md transition-all group"
                    >
                       <div className="flex items-center gap-3">

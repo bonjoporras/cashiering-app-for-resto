@@ -22,6 +22,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, settings }) =
     const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
 
     if (user) {
+      // Check if account is active
+      if (user.isActive === false) { // Explicit false check, undefined assumes true for legacy
+        setError('Account is deactivated. Contact Default Admin.');
+        return;
+      }
+
+      // Check if account is expired (only for non-default admins usually, but check all who have a date)
+      if (user.validUntil) {
+        const now = new Date();
+        const expiryDate = new Date(user.validUntil);
+        if (now > expiryDate) {
+           setError('Account validity expired. Contact Default Admin to extend.');
+           return;
+        }
+      }
+
       onLogin(user);
     } else {
       setError('Invalid username or password');

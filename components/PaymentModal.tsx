@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, X, Plus, ShoppingBag, Printer } from 'lucide-react';
 import { CartItem, AppSettings } from '../types';
@@ -32,44 +33,70 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen]);
 
   // Handle Print Summary (formerly Export logic)
-  const handlePrintSummary = () => {
-    // Generate text content for the file
-    const date = new Date().toLocaleString();
-    const line = "----------------------------------------";
+  const handlePrintSummary = async () => {
+    // Generate text content for the file download (optional backup)
+    const now = new Date();
+    const date = now.toLocaleString();
+    const line = "-".repeat(32);
     
+    // Create a filename that is unique and descriptive
+    const dateFilename = now.toLocaleDateString().replace(/\//g, '-');
+    const timeFilename = now.toLocaleTimeString().replace(/:/g, '-').replace(/\s/g, '');
+    const sanitizedCustomer = customerName.replace(/[^a-z0-9]/gi, '_');
+    const filename = `Receipt-${sanitizedCustomer}-${dateFilename}-${timeFilename}.txt`;
+
     let content = `${settings.appName.toUpperCase()}\n`;
     content += `ORDER SUMMARY\n`;
     content += `${line}\n`;
-    content += `Date:     ${date}\n`;
+    content += `Date: ${date}\n`;
     content += `Customer: ${customerName}\n`;
-    content += `${line}\n`;
-    content += `QTY   ITEM                          PRICE\n`;
     content += `${line}\n`;
 
     cartItems.forEach(item => {
-      // Format: "2x    Burger                        500.00"
-      const qty = `${item.quantity}x`.padEnd(6);
-      const name = item.name.padEnd(28).slice(0, 28);
-      const price = (item.price * item.quantity).toFixed(2).padStart(8);
-      content += `${qty}${name}${price}\n`;
+      content += `${item.name}\n`;
+      content += `${item.quantity} x ${item.price.toFixed(2)} = ${(item.price * item.quantity).toFixed(2)}\n`;
     });
 
     content += `${line}\n`;
-    content += `TOTAL:                          ${total.toFixed(2)}\n`;
+    content += `TOTAL: ${total.toFixed(2)}\n`;
     content += `${line}\n`;
 
-    // 1. Trigger Download ("Locate")
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'orders.txt'; 
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // 1. Trigger Save/Download
+    // Using File System Access API if available to allow saving to specific drive (e.g., USB E:\Receipts)
+    try {
+        if ('showSaveFilePicker' in window) {
+            const opts = {
+                suggestedName: filename,
+                types: [{
+                    description: 'Receipt Text File',
+                    accept: { 'text/plain': ['.txt'] },
+                }],
+            };
+            // @ts-ignore
+            const handle = await window.showSaveFilePicker(opts);
+            // @ts-ignore
+            const writable = await handle.createWritable();
+            // @ts-ignore
+            await writable.write(content);
+            // @ts-ignore
+            await writable.close();
+        } else {
+            // Fallback for browsers that don't support File System Access API
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename; 
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    } catch (err) {
+        console.log("Save cancelled or failed:", err);
+    }
 
-    // 2. Open in new window and Automatic Print
-    const printWindow = window.open('', '_blank', 'width=900,height=600');
+    // 2. Open in new window and Automatic Print (Formatted for 56mm)
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
         printWindow.document.write(`
             <html>
@@ -78,21 +105,64 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <style>
                         body { 
                             font-family: 'Courier New', Courier, monospace; 
-                            white-space: pre; 
-                            padding: 40px; 
-                            font-size: 14px;
+                            width: 56mm; 
+                            margin: 0;
+                            padding: 5px; 
+                            font-size: 11px;
                             line-height: 1.2;
                             color: #000;
                         }
+                        .text-center { text-align: center; }
+                        .text-right { text-align: right; }
+                        .flex-between { display: flex; justify-content: space-between; }
+                        .bold { font-weight: bold; }
+                        .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
+                        .border-top { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                        .item-row { margin-bottom: 3px; }
+                        .item-details { font-size: 10px; padding-left: 5px; display: flex; justify-content: space-between; }
                         @media print {
-                            body { padding: 0; margin: 0; }
+                            body { padding: 0; margin: 0; width: 56mm; }
+                            @page { margin: 0; size: 58mm auto; }
                         }
                     </style>
                 </head>
-                <body>${content}</body>
+                <body>
+                    <div class="text-center border-bottom">
+                        <div class="bold" style="font-size: 14px;">${settings.appName}</div>
+                        <div>ORDER SUMMARY</div>
+                    </div>
+                    
+                    <div class="border-bottom">
+                        <div class="flex-between"><span>Date:</span><span>${new Date().toLocaleDateString()}</span></div>
+                        <div class="flex-between"><span>Time:</span><span>${new Date().toLocaleTimeString()}</span></div>
+                        <div>Customer: <span class="bold">${customerName}</span></div>
+                    </div>
+
+                    <div class="border-bottom">
+                        ${cartItems.map(item => `
+                            <div class="item-row">
+                                <div>${item.name}</div>
+                                <div class="item-details">
+                                    <span>${item.quantity} x ${item.price.toFixed(2)}</span>
+                                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="border-bottom bold">
+                         <div class="flex-between" style="font-size: 14px;">
+                            <span>TOTAL</span>
+                            <span>${total.toFixed(2)}</span>
+                         </div>
+                    </div>
+                    
+                    <div class="text-center" style="font-size: 9px; margin-top: 10px;">
+                        -- Summary Only --
+                    </div>
+                </body>
                 <script>
                     window.onload = function() {
-                        // Small delay to ensure content renders before print
                         setTimeout(function() { 
                             window.print(); 
                         }, 500);
@@ -102,16 +172,101 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         `);
         printWindow.document.close();
     }
-
-    // 3. Assist in "Locating" it
-    setTimeout(() => {
-       alert("Export successful!\n\nFile 'orders.txt' has been saved to your Downloads folder.");
-       URL.revokeObjectURL(url);
-    }, 800);
   };
 
   const handlePrintReceipt = () => {
-    window.print();
+    const received = parseFloat(cashReceived) || 0;
+    const changeAmount = received - total;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Receipt - ${customerName}</title>
+                    <style>
+                        body { 
+                            font-family: 'Courier New', Courier, monospace; 
+                            width: 56mm; 
+                            margin: 0;
+                            padding: 5px; 
+                            font-size: 11px;
+                            line-height: 1.2;
+                            color: #000;
+                        }
+                        .text-center { text-align: center; }
+                        .text-right { text-align: right; }
+                        .flex-between { display: flex; justify-content: space-between; }
+                        .bold { font-weight: bold; }
+                        .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
+                        .border-top { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                        .item-row { margin-bottom: 3px; }
+                        .item-details { font-size: 10px; padding-left: 5px; display: flex; justify-content: space-between; }
+                        @media print {
+                            body { padding: 0; margin: 0; width: 56mm; }
+                            @page { margin: 0; size: 58mm auto; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="text-center border-bottom">
+                        ${settings.appLogo !== 'default' ? `<img src="${settings.appLogo}" style="height: 40px; margin-bottom: 5px; filter: grayscale(100%);" />` : ''}
+                        <div class="bold" style="font-size: 14px;">${settings.appName}</div>
+                        <div>OFFICIAL RECEIPT</div>
+                    </div>
+                    
+                    <div class="border-bottom">
+                        <div class="flex-between"><span>Date:</span><span>${new Date().toLocaleDateString()}</span></div>
+                        <div class="flex-between"><span>Time:</span><span>${new Date().toLocaleTimeString()}</span></div>
+                        <div>Customer: <span class="bold">${customerName}</span></div>
+                    </div>
+
+                    <div class="border-bottom">
+                        ${cartItems.map(item => `
+                            <div class="item-row">
+                                <div>${item.name}</div>
+                                <div class="item-details">
+                                    <span>${item.quantity} x ${item.price.toFixed(2)}</span>
+                                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="border-bottom bold">
+                         <div class="flex-between" style="font-size: 14px;">
+                            <span>TOTAL</span>
+                            <span>${total.toFixed(2)}</span>
+                         </div>
+                    </div>
+                    
+                    <div class="border-bottom">
+                         <div class="flex-between">
+                            <span>Cash</span>
+                            <span>${received.toFixed(2)}</span>
+                         </div>
+                         <div class="flex-between">
+                            <span>Change</span>
+                            <span>${Math.max(0, changeAmount).toFixed(2)}</span>
+                         </div>
+                    </div>
+                    
+                    <div class="text-center" style="font-size: 9px; margin-top: 10px;">
+                        <p>Thank you for your business!</p>
+                        <p>POS: ${settings.appName}</p>
+                    </div>
+                </body>
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() { 
+                            window.print(); 
+                        }, 500);
+                    };
+                </script>
+            </html>
+        `);
+        printWindow.document.close();
+    }
   };
 
   // Handle keyboard shortcuts
@@ -133,7 +288,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, step, cartItems, total, customerName, settings]);
+  }, [isOpen, step, cartItems, total, customerName, settings, cashReceived]);
 
   // Function to generate a Bell "Ting" sound using Web Audio API
   const playBellSound = () => {
@@ -191,7 +346,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   return (
     <>
       {/* --- SCREEN UI --- */}
-      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:hidden">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
           
           {/* Header */}
@@ -318,87 +473,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             )}
           </div>
         </div>
-      </div>
-
-      {/* --- PRINTABLE DOCUMENT (PDF Format / A4) --- */}
-      <div className="hidden print:block fixed inset-0 bg-white z-[10000] p-10 text-slate-900 w-full h-full top-0 left-0 overflow-visible">
-          <div className="max-w-3xl mx-auto border border-slate-200 p-8 rounded-sm">
-              {/* Header */}
-              <div className="flex justify-between items-start mb-8">
-                  <div>
-                      <h1 className="text-2xl font-bold uppercase tracking-wide text-slate-800">{settings.appName}</h1>
-                      <p className="text-sm text-slate-500 mt-1">Official Receipt</p>
-                  </div>
-                  {settings.appLogo !== 'default' && (
-                      <img src={settings.appLogo} alt="Logo" className="h-16 w-auto object-contain" />
-                  )}
-              </div>
-              
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
-                  <div>
-                      <p className="font-bold text-slate-400 uppercase text-xs mb-1">Customer</p>
-                      <p className="font-bold text-lg">{customerName}</p>
-                  </div>
-                  <div className="text-right">
-                      <p className="font-bold text-slate-400 uppercase text-xs mb-1">Date Issued</p>
-                      <p className="font-bold">{new Date().toLocaleDateString()}</p>
-                      <p className="text-slate-500">{new Date().toLocaleTimeString()}</p>
-                  </div>
-              </div>
-
-              {/* Table */}
-              <table className="w-full text-sm mb-8 border-collapse">
-                  <thead>
-                      <tr className="border-b-2 border-slate-800">
-                          <th className="text-left py-3 font-bold text-slate-700">Item Description</th>
-                          <th className="text-center py-3 font-bold text-slate-700">Qty</th>
-                          <th className="text-right py-3 font-bold text-slate-700">Price</th>
-                          <th className="text-right py-3 font-bold text-slate-800">Amount</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                      {cartItems.map((item) => (
-                          <tr key={item.id}>
-                              <td className="py-3 text-slate-700">{item.name}</td>
-                              <td className="text-center py-3 text-slate-700">{item.quantity}</td>
-                              <td className="text-right py-3 text-slate-700">₱{item.price.toFixed(2)}</td>
-                              <td className="text-right py-3 font-bold text-slate-800">₱{(item.price * item.quantity).toFixed(2)}</td>
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
-
-              {/* Totals */}
-              <div className="flex flex-col items-end space-y-2 border-t-2 border-slate-800 pt-4">
-                  <div className="flex justify-between w-64 text-sm">
-                      <span className="font-medium text-slate-600">Subtotal</span>
-                      <span className="font-medium text-slate-800">₱{cartItems.reduce((a, c) => a + c.price * c.quantity, 0).toFixed(2)}</span>
-                  </div>
-                  {receivedAmount > 0 && (
-                     <>
-                        <div className="flex justify-between w-64 text-sm">
-                            <span className="font-medium text-slate-600">Cash Received</span>
-                            <span className="font-medium text-slate-800">₱{receivedAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between w-64 text-sm">
-                            <span className="font-medium text-slate-600">Change</span>
-                            <span className="font-medium text-slate-800">₱{Math.max(0, change).toFixed(2)}</span>
-                        </div>
-                     </>
-                  )}
-                  <div className="flex justify-between w-64 text-xl font-bold mt-2 pt-2 border-t border-slate-100">
-                      <span>Total</span>
-                      <span>₱{total.toFixed(2)}</span>
-                  </div>
-              </div>
-              
-              {/* Footer */}
-              <div className="mt-16 pt-8 border-t border-slate-100 text-center text-xs text-slate-400">
-                  <p className="font-medium text-slate-500 mb-1">Thank you for your business!</p>
-                  <p>System generated report • {settings.appName}</p>
-              </div>
-          </div>
       </div>
     </>
   );

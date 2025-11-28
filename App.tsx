@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Menu, LayoutGrid, Settings, History, Wallet, 
@@ -24,18 +25,14 @@ import {
   getStoredSettings, saveSettingsToStorage,
   getStoredExpenses, saveExpensesToStorage,
   getStoredUsers, saveUsersToStorage,
-  getStoredCustomers, saveCustomersToStorage
+  getStoredCustomers, saveCustomersToStorage,
+  exportAllData
 } from './services/storageService';
 import { MOCK_CUSTOMERS } from './constants';
 
 // Seed Data for fresh start
-const DEFAULT_MENU_ITEMS: MenuItem[] = [
-  { id: '1', name: 'Signature Burger', price: 250, category: 'Burgers', imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=60' },
-  { id: '2', name: 'Truffle Fries', price: 180, category: 'Sides', imageUrl: 'https://images.unsplash.com/photo-1573080496987-a199f8cd4058?auto=format&fit=crop&w=500&q=60' },
-  { id: '3', name: 'Caesar Salad', price: 220, category: 'Salads', imageUrl: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&w=500&q=60' },
-  { id: '4', name: 'Iced Latte', price: 140, category: 'Drinks', imageUrl: 'https://images.unsplash.com/photo-1576435728678-38d01d52e38b?auto=format&fit=crop&w=500&q=60' },
-];
-const DEFAULT_CATEGORIES = ['Burgers', 'Sides', 'Salads', 'Drinks', 'Desserts'];
+const DEFAULT_MENU_ITEMS: MenuItem[] = [];
+const DEFAULT_CATEGORIES: string[] = [];
 
 const App: React.FC = () => {
   // --- State ---
@@ -74,7 +71,8 @@ const App: React.FC = () => {
     setOrders(getStoredOrders());
     setCustomers(getStoredCustomers(MOCK_CUSTOMERS));
     setExpenses(getStoredExpenses());
-    setSettings(getStoredSettings());
+    const storedSettings = getStoredSettings();
+    setSettings(storedSettings); // Load settings
     setUsers(getStoredUsers());
   }, []);
 
@@ -100,7 +98,23 @@ const App: React.FC = () => {
     }
   };
 
+  // Listen for fullscreen change events (e.g. user presses Esc)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const handleLogout = () => {
+    // Auto-backup on logout
+    // This will download a JSON file to the browser's default download location (e.g., C:\Downloads)
+    try {
+        exportAllData('AutoBackup');
+    } catch (e) {
+        console.error("Auto-backup failed", e);
+    }
     setCurrentUser(null);
   };
 
@@ -286,25 +300,42 @@ const App: React.FC = () => {
     setSelectedCustomerId(null);
   };
 
+  // Helper to add category safely
+  const ensureCategoryExists = (cat: string) => {
+    if (!cat) return;
+    const trimmed = cat.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      const updated = [...categories, trimmed];
+      setCategories(updated);
+      saveCategoriesToStorage(updated);
+    }
+  };
+
   // Product Management
   const handleAddProduct = (item: MenuItem) => {
     const updated = [item, ...items];
     setItems(updated);
     saveProductsToStorage(updated);
+    ensureCategoryExists(item.category);
   };
+  
   const handleUpdateProduct = (item: MenuItem) => {
     const updated = items.map(i => i.id === item.id ? item : i);
     setItems(updated);
     saveProductsToStorage(updated);
+    ensureCategoryExists(item.category);
   };
+  
   const handleDeleteProduct = (id: string) => {
     const updated = items.filter(i => i.id !== id);
     setItems(updated);
     saveProductsToStorage(updated);
   };
   const handleAddCategory = (cat: string) => {
-    if (!categories.includes(cat)) {
-      const updated = [...categories, cat];
+    if (!cat) return;
+    const trimmed = cat.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      const updated = [...categories, trimmed];
       setCategories(updated);
       saveCategoriesToStorage(updated);
     }
@@ -411,12 +442,20 @@ const App: React.FC = () => {
     setUsers(updated);
     saveUsersToStorage(updated);
   };
+  
+  const handleUpdateUser = (id: string, updates: Partial<User>) => {
+    const updated = users.map(u => u.id === id ? { ...u, ...updates } : u);
+    setUsers(updated);
+    saveUsersToStorage(updated);
+  };
+
+  // --- RENDER BLOCKERS ---
 
   // Render Login
   if (!currentUser) {
     return <LoginScreen onLogin={setCurrentUser} settings={settings} />;
   }
-
+  
   // Calculate totals for payment modal
   const cartSubtotal = currentCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartDiscount = selectedCustomer ? Math.min(selectedCustomer.discountValue, cartSubtotal) : 0;
@@ -425,6 +464,17 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-100 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-300 print:h-auto print:overflow-visible">
       {settings.isSnowing && <SnowEffect />}
+      
+      {/* Floating Exit Fullscreen Button */}
+      {isFullscreen && (
+        <button
+          onClick={toggleFullscreen}
+          className="fixed top-4 right-4 z-[9999] p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-all shadow-lg border border-white/10"
+          title="Exit Fullscreen"
+        >
+          <Minimize size={20} />
+        </button>
+      )}
 
       {/* 1. Sidebar (Customers) */}
       <div className="w-64 h-full flex-shrink-0 shadow-xl z-20 print:hidden">
@@ -436,67 +486,70 @@ const App: React.FC = () => {
           onUpdateCustomer={handleUpdateCustomer}
           onDeleteCustomer={handleDeleteCustomer}
           settings={settings}
+          isFullscreen={isFullscreen}
         />
       </div>
 
       {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900/50 relative">
         
-        {/* Header */}
-        <header className="h-[60px] bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 shrink-0 transition-colors duration-300 print:hidden">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setActiveTab('pos')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'pos' ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-            >
-              <Menu size={18} /> POS
-            </button>
-            <button 
-              onClick={() => { setActiveTab('management'); setManagementTab('products'); }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'management' ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-            >
-              <LayoutGrid size={18} /> Management
-            </button>
-          </div>
+        {/* Header - Hidden in Fullscreen */}
+        {!isFullscreen && (
+          <header className="h-[60px] bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 shrink-0 transition-colors duration-300 print:hidden">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setActiveTab('pos')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'pos' ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                <Menu size={18} /> POS
+              </button>
+              <button 
+                onClick={() => { setActiveTab('management'); setManagementTab('products'); }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'management' ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                <LayoutGrid size={18} /> Management
+              </button>
+            </div>
 
-          <div className="flex items-center gap-1">
-             <button onClick={() => setIsExpensesOpen(true)} className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Expenses">
-                <Wallet size={20} />
-             </button>
-             <button onClick={() => setIsHistoryOpen(true)} className="p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="History">
-                <History size={20} />
-             </button>
-             {currentUser.role === 'admin' && (
-                <>
-                  <button onClick={() => setIsUserMgmtOpen(true)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Users">
-                      <UsersIcon size={20} />
-                  </button>
-                  <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Settings">
-                      <Settings size={20} />
-                  </button>
-                </>
-             )}
-             
-             <div className="w-px h-6 bg-slate-200 dark:bg-slate-600 mx-1"></div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setIsExpensesOpen(true)} className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Expenses">
+                  <Wallet size={20} />
+              </button>
+              <button onClick={() => setIsHistoryOpen(true)} className="p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="History">
+                  <History size={20} />
+              </button>
+              {currentUser.role === 'admin' && (
+                  <>
+                    <button onClick={() => setIsUserMgmtOpen(true)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Users">
+                        <UsersIcon size={20} />
+                    </button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Settings">
+                        <Settings size={20} />
+                    </button>
+                  </>
+              )}
+              
+              <div className="w-px h-6 bg-slate-200 dark:bg-slate-600 mx-1"></div>
 
-             <button 
-               onClick={toggleFullscreen}
-               className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-               title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-             >
-                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-             </button>
+              <button 
+                onClick={toggleFullscreen}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                title="Enter Fullscreen"
+              >
+                  <Maximize size={20} />
+              </button>
 
-             <button 
-               onClick={handleLogout}
-               className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors ml-1"
-               title="Logout"
-             >
-                <LogOut size={20} />
-                <span className="font-medium hidden xl:inline">Logout</span>
-             </button>
-          </div>
-        </header>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors ml-1"
+                title="Logout (Auto-Backup)"
+              >
+                  <LogOut size={20} />
+                  <span className="font-medium hidden xl:inline">Logout</span>
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden relative print:overflow-visible print:h-auto">
@@ -535,16 +588,47 @@ const App: React.FC = () => {
 
                 {/* Grid */}
                 <div className="flex-1 overflow-y-auto p-4 print:overflow-visible print:h-auto">
-                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {filteredItems.map(item => (
-                         <MenuCard key={item.id} item={item} onAddToCart={handleAddToCart} />
-                      ))}
-                   </div>
-                   {filteredItems.length === 0 && (
+                   {filteredItems.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-slate-400">
                          <UtensilsCrossed size={48} className="mb-4 opacity-20" />
                          <p>No items found</p>
                       </div>
+                   ) : (
+                     <div className="space-y-8 pb-8">
+                       {(selectedCategory === 'All' ? categories : [selectedCategory]).map(category => {
+                          const categoryItems = filteredItems.filter(item => item.category === category);
+                          if (categoryItems.length === 0) return null;
+                          
+                          return (
+                            <div key={category}>
+                              <h3 className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2 px-1">
+                                <span className="w-2 h-2 rounded-full bg-brand-500"></span>
+                                {category}
+                              </h3>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                {categoryItems.map(item => (
+                                  <MenuCard key={item.id} item={item} onAddToCart={handleAddToCart} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                       })}
+                       
+                       {/* Handle items in "Other" category or unlisted categories when showing All */}
+                       {selectedCategory === 'All' && filteredItems.filter(i => !categories.includes(i.category)).length > 0 && (
+                          <div key="Other">
+                              <h3 className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2 px-1">
+                                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                                Other
+                              </h3>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                {filteredItems.filter(i => !categories.includes(i.category)).map(item => (
+                                  <MenuCard key={item.id} item={item} onAddToCart={handleAddToCart} />
+                                ))}
+                              </div>
+                          </div>
+                       )}
+                     </div>
                    )}
                 </div>
              </div>
@@ -583,6 +667,7 @@ const App: React.FC = () => {
              setDiscountValue={handleDiscountChange}
              customerName={selectedCustomer?.name || 'Select Customer'}
              isEditing={!!selectedCustomer?.editingOrderId}
+             isFullscreen={isFullscreen}
            />
         </div>
       )}
@@ -626,7 +711,8 @@ const App: React.FC = () => {
         users={users}
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}
-        currentUserId={currentUser.id}
+        onUpdateUser={handleUpdateUser}
+        currentUser={currentUser}
       />
 
     </div>

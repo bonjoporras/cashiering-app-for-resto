@@ -159,7 +159,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 export const getStoredSettings = (): AppSettings => {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
-    return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+    const settings = stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+    return settings;
   } catch (error) {
     console.error("Failed to parse settings", error);
     return DEFAULT_SETTINGS;
@@ -186,9 +187,12 @@ export const getStoredUsers = (): User[] => {
     const defaultAdmin: User = {
       id: 'admin1',
       username: 'admin',
-      password: '1234', // Default password
+      password: '020890', // Default password
       role: 'admin',
-      name: 'Administrator'
+      name: 'Administrator',
+      isDefaultAdmin: true,
+      isActive: true,
+      validUntil: null // Infinite
     };
     localStorage.setItem(USERS_KEY, JSON.stringify([defaultAdmin]));
     return [defaultAdmin];
@@ -242,7 +246,7 @@ interface DatabaseBackup {
   };
 }
 
-export const exportAllData = () => {
+export const exportAllData = (prefix: string = "Database") => {
   const backup: DatabaseBackup = {
     version: 1,
     timestamp: new Date().toISOString(),
@@ -261,10 +265,15 @@ export const exportAllData = () => {
   const blob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   
+  // Format Date and Time for Filename (safe for Windows filenames)
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const timeStr = now.toLocaleTimeString('en-GB').replace(/:/g, '-'); // HH-MM-SS
+
   const a = document.createElement('a');
   a.href = url;
-  // Make filename more descriptive
-  a.download = `BistroGenius_Database_${new Date().toISOString().split('T')[0]}.json`;
+  // Format: BistroGenius_AutoBackup_2023-10-27_14-30-00.json
+  a.download = `BistroGenius_${prefix}_${dateStr}_${timeStr}.json`;
   a.click();
   URL.revokeObjectURL(url);
 };

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { CartItem } from '../types';
 import { Minus, Plus, Trash2, ShoppingBag, XCircle, AlertTriangle, PenTool } from 'lucide-react';
@@ -12,6 +13,7 @@ interface CartProps {
   setDiscountValue: (value: number) => void;
   customerName: string;
   isEditing?: boolean;
+  isFullscreen?: boolean;
 }
 
 export const Cart: React.FC<CartProps> = ({
@@ -23,7 +25,8 @@ export const Cart: React.FC<CartProps> = ({
   discountValue,
   setDiscountValue,
   customerName,
-  isEditing = false
+  isEditing = false,
+  isFullscreen = false,
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export const Cart: React.FC<CartProps> = ({
            <h2 className="text-base font-bold text-slate-800 dark:text-white leading-none">
              {isEditing ? 'Editing Order' : 'Current Order'}
            </h2>
-           <span className="text-sm font-extrabold text-slate-900 dark:text-white bg-yellow-300 dark:bg-brand-700 px-2 py-0.5 rounded-md shadow-sm border border-yellow-400 dark:border-brand-600 truncate max-w-[90px] leading-none">
+           <span className="text-sm font-extrabold text-white bg-red-500 dark:bg-red-600 px-2 py-0.5 rounded-md shadow-sm border border-red-600 dark:border-red-500 truncate max-w-[90px] leading-none">
              {customerName}
            </span>
         </div>
@@ -106,12 +109,12 @@ export const Cart: React.FC<CartProps> = ({
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                       {/* Name & Delete */}
                       <div className="flex justify-between items-start gap-1">
-                        <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm leading-tight truncate" title={item.name}>
+                        <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs leading-tight line-clamp-2" title={item.name}>
                             {item.name}
                         </h4>
                         <button 
                             onClick={() => setItemToDelete(item.id)}
-                            className="text-slate-300 hover:text-red-500 p-0.5 -mr-1 -mt-1"
+                            className="text-slate-300 hover:text-red-500 p-0.5 -mr-1 -mt-1 shrink-0"
                             title="Remove Item"
                         >
                             <Trash2 size={14} />
@@ -120,27 +123,27 @@ export const Cart: React.FC<CartProps> = ({
 
                       {/* Price & Quantity Row */}
                       <div className="flex items-end justify-between mt-1">
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
                             ₱{(item.price * item.quantity).toFixed(0)}
                         </span>
 
-                        {/* Compact Quantity Control */}
-                        <div className="flex items-center bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-500 h-6 shadow-sm">
+                        {/* Quantity Control */}
+                        <div className="flex items-center bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-500 h-5 shadow-sm">
                             <button 
                                 onClick={() => onUpdateQuantity(item.id, -1)}
                                 className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-l transition-colors"
                                 disabled={item.quantity <= 1}
                             >
-                                <Minus size={10} />
+                                <Minus size={8} />
                             </button>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 px-1 min-w-[14px] text-center">
+                            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-100 px-1 min-w-[12px] text-center">
                             {item.quantity}
                             </span>
                             <button 
                                 onClick={() => onUpdateQuantity(item.id, 1)}
                                 className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-r transition-colors"
                             >
-                                <Plus size={10} />
+                                <Plus size={8} />
                             </button>
                         </div>
                       </div>
@@ -160,17 +163,17 @@ export const Cart: React.FC<CartProps> = ({
           <span className="text-slate-600 dark:text-slate-400 text-sm font-medium">Discount (₱)</span>
           <div className="flex items-center gap-2">
             <div className="relative">
-                <input 
-                   type="number" 
-                   min="0"
-                   value={discountValue || ''} 
-                   onChange={handleDiscountChange}
-                   className="w-20 px-2 py-1 text-right text-sm font-bold border border-slate-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-800 dark:text-white pr-4"
-                   placeholder="0"
-                />
-                <span className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium pointer-events-none">
-                   ₱
-                </span>
+              <input 
+                  type="number" 
+                  min="0"
+                  value={discountValue || ''} 
+                  onChange={handleDiscountChange}
+                  className="w-20 px-2 py-1 text-right text-sm font-bold border border-slate-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-800 dark:text-white pr-4"
+                  placeholder="0"
+              />
+              <span className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium pointer-events-none">
+                  ₱
+              </span>
             </div>
           </div>
         </div>

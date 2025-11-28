@@ -202,13 +202,15 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(formData.price?.toString() || '0');
+    const category = formData.category?.trim() || 'Uncategorized';
 
     if (editingItem) {
       // Update existing
       onUpdate({ 
         ...editingItem,
         ...formData as MenuItem,
-        price
+        price,
+        category // Ensure trimmed category is used
       });
     } else {
       // Add new
@@ -216,7 +218,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
         id: Date.now().toString(),
         name: formData.name || 'New Product',
         price,
-        category: formData.category || 'Uncategorized',
+        category,
         imageUrl: formData.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=300&q=80'
       });
     }

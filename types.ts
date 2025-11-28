@@ -66,4 +66,7 @@ export interface User {
   password: string; // In a real app, this should be hashed
   role: 'admin' | 'user';
   name: string;
+  isDefaultAdmin?: boolean; // True only for the super admin
+  isActive?: boolean; // If false, cannot login
+  validUntil?: string | null; // ISO Date string. If present, account expires after this date. Null = infinite.
 }
