@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Menu, LayoutGrid, Settings, History, Wallet, 
-  Maximize, Minimize, LogOut, Users as UsersIcon, Search, UtensilsCrossed 
+  Maximize, Minimize, LogOut, Users as UsersIcon, Search, UtensilsCrossed, Database 
 } from 'lucide-react';
 import { 
   MenuItem, Order, Customer, AppSettings, Expense, User 
@@ -18,6 +18,7 @@ import { ExpensesModal } from './components/ExpensesModal';
 import { LoginScreen } from './components/LoginScreen';
 import { UserManagementModal } from './components/UserManagementModal';
 import { SnowEffect } from './components/SnowEffect';
+import { SubscriptionLockScreen } from './components/SubscriptionLockScreen';
 import { 
   getStoredOrders, saveOrderToStorage, saveOrdersToStorage, deleteOrderFromStorage,
   getStoredProducts, saveProductsToStorage,
@@ -61,6 +62,7 @@ const App: React.FC = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'database'>('general');
   const [isExpensesOpen, setIsExpensesOpen] = useState(false);
   const [isUserMgmtOpen, setIsUserMgmtOpen] = useState(false);
 
@@ -108,13 +110,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    // Auto-backup on logout
-    // This will download a JSON file to the browser's default download location (e.g., C:\Downloads)
-    try {
-        exportAllData('AutoBackup');
-    } catch (e) {
-        console.error("Auto-backup failed", e);
-    }
+    exportAllData('AutoBackup_Logout');
     setCurrentUser(null);
   };
 
@@ -141,8 +137,6 @@ const App: React.FC = () => {
   const handleAddCustomer = () => {
     // Generate a unique name for a new customer "Customer X"
     let nextNum = 1;
-    // We want to avoid duplicates among *active* customers in the sidebar.
-    // It's okay if a past order has "Customer 1" and we make a new "Customer 1".
     const activeNames = new Set(customers.map(c => c.name));
     while (activeNames.has(`Customer ${nextNum}`)) {
       nextNum++;
@@ -159,7 +153,7 @@ const App: React.FC = () => {
       cart: [],
       discountType: 'fixed',
       discountValue: 0,
-      editingOrderId: undefined // Explicitly undefined for new customer
+      editingOrderId: undefined
     };
     const updated = [newCustomer, ...customers];
     setCustomers(updated);
@@ -185,7 +179,6 @@ const App: React.FC = () => {
     if (!selectedCustomerId) {
        if (customers.length === 0) {
          handleAddCustomer();
-         // Wait for state update or create customer inline if needed, but simple return here for safety
          return; 
        }
        alert("Please select a customer first.");
@@ -224,8 +217,11 @@ const App: React.FC = () => {
 
   const handleClearCart = () => {
     if (!selectedCustomer) return;
-    // Clearing cart also cancels edit mode if active
-    handleUpdateCustomer(selectedCustomer.id, { cart: [], discountValue: 0, editingOrderId: undefined });
+    handleUpdateCustomer(selectedCustomer.id, { 
+       cart: [], 
+       discountValue: 0, 
+       editingOrderId: undefined,
+    });
   };
 
   const handleDiscountChange = (val: number) => {
@@ -247,24 +243,19 @@ const App: React.FC = () => {
   const handlePaymentConfirmed = () => {
     if (!selectedCustomer) return;
     
-    // Calculate totals with correct discount logic
     const subtotal = selectedCustomer.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    
     let discount = 0;
     if (selectedCustomer.discountType === 'percent') {
         discount = subtotal * (selectedCustomer.discountValue / 100);
     } else {
         discount = selectedCustomer.discountValue;
     }
-    // Ensure discount doesn't exceed subtotal
     discount = Math.min(discount, subtotal);
-    
     const total = subtotal - discount;
 
     let updatedOrders: Order[];
 
     if (selectedCustomer.editingOrderId) {
-        // --- EDIT MODE: Update Existing Order ---
         updatedOrders = orders.map(order => {
             if (order.id === selectedCustomer.editingOrderId) {
                 return {
@@ -276,7 +267,7 @@ const App: React.FC = () => {
                     discountType: selectedCustomer.discountType,
                     discountValue: selectedCustomer.discountValue,
                     customerName: selectedCustomer.name,
-                    date: new Date().toISOString() // Update timestamp to reflect edit time
+                    date: new Date().toISOString()
                 };
             }
             return order;
@@ -284,13 +275,12 @@ const App: React.FC = () => {
         setOrders(updatedOrders);
         saveOrdersToStorage(updatedOrders);
     } else {
-        // --- NEW ORDER MODE ---
         const newOrder: Order = {
           id: Date.now().toString(),
           items: [...selectedCustomer.cart],
           total,
           subtotal,
-          tax: 0, // Simplified
+          tax: 0,
           date: new Date().toISOString(),
           customerName: selectedCustomer.name,
           discount,
@@ -301,18 +291,17 @@ const App: React.FC = () => {
         setOrders(updatedOrders);
     }
 
-    // Update Customer (points, clear cart)
     const newPoints = selectedCustomer.loyaltyPoints + Math.floor(total / 100);
     
-    // Instead of deleting the customer, we just clear their cart and update points.
-    // Also CLEAR editingOrderId so next order is new.
+    // Clear Customer Cart, Points
     const updatedCustomers = customers.filter(c => c.id !== selectedCustomer.id);
     setCustomers(updatedCustomers);
     saveCustomersToStorage(updatedCustomers);
     setSelectedCustomerId(null);
   };
 
-  // Helper to add category safely
+  // ... (Helper functions for Products/Categories/Expenses/Users unchanged)
+  
   const ensureCategoryExists = (cat: string) => {
     if (!cat) return;
     const trimmed = cat.trim();
@@ -323,7 +312,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Product Management
   const handleAddProduct = (item: MenuItem) => {
     const updated = [item, ...items];
     setItems(updated);
@@ -356,25 +344,21 @@ const App: React.FC = () => {
     const updatedCats = categories.filter(c => c !== cat);
     setCategories(updatedCats);
     saveCategoriesToStorage(updatedCats);
-    // Recursively delete products in this category
     const updatedItems = items.filter(i => i.category !== cat);
     setItems(updatedItems);
     saveProductsToStorage(updatedItems);
     if (selectedCategory === cat) setSelectedCategory('All');
   };
 
-  // Order Management
   const handleDeleteOrder = (id: string) => {
     const updated = deleteOrderFromStorage(id);
     setOrders(updated);
   };
 
-  // Restore order to cart (overwrite current customer cart)
   const handleRestoreOrder = (order: Order) => {
     let currentCustomers = [...customers];
     let targetId = selectedCustomerId;
 
-    // If no customer is currently selected, create one to hold the restored order
     if (!targetId) {
       let nextNum = 1;
       const activeNames = new Set(currentCustomers.map(c => c.name));
@@ -384,7 +368,7 @@ const App: React.FC = () => {
       
       const newCustomer: Customer = {
         id: Date.now().toString(),
-        name: `Customer ${nextNum}`, // Placeholder, will be overwritten below
+        name: `Customer ${nextNum}`,
         email: '',
         phone: '',
         visits: 1,
@@ -400,17 +384,15 @@ const App: React.FC = () => {
       setSelectedCustomerId(targetId);
     }
 
-    // Update the target customer with restored order data (Cart & Name)
     const updatedCustomers = currentCustomers.map(c => {
       if (c.id === targetId) {
         return {
           ...c,
-          cart: order.items.map(i => ({...i})), // Deep copy items
+          cart: order.items.map(i => ({...i})),
           discountValue: order.discountValue || 0,
           discountType: order.discountType || 'fixed',
-          // Force overwrite customer name with order name
           name: order.customerName && order.customerName !== 'Guest' ? order.customerName : c.name,
-          editingOrderId: order.id // TRACK THE ID TO ENABLE EDIT MODE
+          editingOrderId: order.id
         };
       }
       return c;
@@ -418,12 +400,10 @@ const App: React.FC = () => {
 
     setCustomers(updatedCustomers);
     saveCustomersToStorage(updatedCustomers);
-    
     setActiveTab('pos');
     setIsHistoryOpen(false);
   };
 
-  // Expenses
   const handleAddExpense = (expense: Omit<Expense, 'id'>) => {
     const newExp = { ...expense, id: Date.now().toString() };
     const updated = [newExp, ...expenses];
@@ -436,13 +416,11 @@ const App: React.FC = () => {
     saveExpensesToStorage(updated);
   };
 
-  // Settings
   const handleSaveSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
     saveSettingsToStorage(newSettings);
   };
 
-  // Users
   const handleAddUser = (user: Omit<User, 'id'>) => {
     const newUser = { ...user, id: Date.now().toString() };
     const updated = [...users, newUser];
@@ -459,6 +437,10 @@ const App: React.FC = () => {
     const updated = users.map(u => u.id === id ? { ...u, ...updates } : u);
     setUsers(updated);
     saveUsersToStorage(updated);
+    // Update current session if self
+    if (currentUser?.id === id) {
+       setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   // --- RENDER BLOCKERS ---
@@ -467,11 +449,26 @@ const App: React.FC = () => {
   if (!currentUser) {
     return <LoginScreen onLogin={setCurrentUser} settings={settings} />;
   }
+
+  // Check Subscription / Validity
+  const isExpired = currentUser.validUntil ? new Date() > new Date(currentUser.validUntil) : false;
+  if (isExpired) {
+     // If expired, show lock screen unless they enter a valid "activation code" (simulation)
+     const handleActivate = (code: string) => {
+        // Simple mock activation for demo purposes
+        if (code === 'ADMIN-UNLOCK') {
+           // Extend validity by 30 days
+           const newDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+           handleUpdateUser(currentUser.id, { validUntil: newDate, isActive: true });
+           return true;
+        }
+        return false;
+     };
+     return <SubscriptionLockScreen onActivate={handleActivate} />;
+  }
   
   // Calculate totals for payment modal
   const cartSubtotal = currentCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  
-  // Calculate Discount Amount based on Type
   let cartDiscountAmount = 0;
   if (selectedCustomer) {
       if (selectedCustomer.discountType === 'percent') {
@@ -481,14 +478,12 @@ const App: React.FC = () => {
       }
       cartDiscountAmount = Math.min(cartDiscountAmount, cartSubtotal);
   }
-  
   const cartTotal = cartSubtotal - cartDiscountAmount;
 
   return (
     <div className="flex h-screen bg-slate-100 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-300 print:h-auto print:overflow-visible">
       {settings.isSnowing && <SnowEffect />}
       
-      {/* Floating Exit Fullscreen Button */}
       {isFullscreen && (
         <button
           onClick={toggleFullscreen}
@@ -516,7 +511,6 @@ const App: React.FC = () => {
       {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900/50 relative">
         
-        {/* Header - Hidden in Fullscreen */}
         {!isFullscreen && (
           <header className="h-[60px] bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 shrink-0 transition-colors duration-300 print:hidden">
             <div className="flex items-center gap-2">
@@ -546,7 +540,24 @@ const App: React.FC = () => {
                     <button onClick={() => setIsUserMgmtOpen(true)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Users">
                         <UsersIcon size={20} />
                     </button>
-                    <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Settings">
+                    <button 
+                        onClick={() => {
+                            setSettingsInitialTab('database');
+                            setIsSettingsOpen(true);
+                        }} 
+                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" 
+                        title="Database (Backup & Restore)"
+                    >
+                        <Database size={20} />
+                    </button>
+                    <button 
+                        onClick={() => {
+                            setSettingsInitialTab('general');
+                            setIsSettingsOpen(true);
+                        }} 
+                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" 
+                        title="Settings"
+                    >
                         <Settings size={20} />
                     </button>
                   </>
@@ -565,7 +576,7 @@ const App: React.FC = () => {
               <button 
                 onClick={handleLogout}
                 className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors ml-1"
-                title="Logout (Auto-Backup)"
+                title="Logout"
               >
                   <LogOut size={20} />
                   <span className="font-medium hidden xl:inline">Logout</span>
@@ -579,18 +590,9 @@ const App: React.FC = () => {
            {activeTab === 'pos' ? (
              <div className="h-full flex flex-col">
                 {/* Filters */}
-                <div className="p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shrink-0 transition-colors duration-300 print:hidden">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input 
-                          type="text" 
-                          placeholder="Search menu..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-900 border-none rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white"
-                        />
-                    </div>
-                    <div className="flex-1 flex gap-2 overflow-x-auto scrollbar-hide">
+                <div className="p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-3 shrink-0 transition-colors duration-300 print:hidden">
+                    {/* Categories moved above search */}
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide w-full pb-1">
                        <button
                          onClick={() => setSelectedCategory('All')}
                          className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${selectedCategory === 'All' ? 'bg-brand-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
@@ -606,6 +608,17 @@ const App: React.FC = () => {
                            {cat}
                          </button>
                        ))}
+                    </div>
+
+                    <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Search menu..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-900 border-none rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white"
+                        />
                     </div>
                 </div>
 
@@ -637,7 +650,6 @@ const App: React.FC = () => {
                           );
                        })}
                        
-                       {/* Handle items in "Other" category or unlisted categories when showing All */}
                        {selectedCategory === 'All' && filteredItems.filter(i => !categories.includes(i.category)).length > 0 && (
                           <div key="Other">
                               <h3 className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-xs mb-4 flex items-center gap-2 px-1">
@@ -677,7 +689,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Cart Panel (Right) - Only visible in POS mode */}
+      {/* 3. Cart Panel (Right) */}
       {activeTab === 'pos' && (
         <div className="w-[340px] border-l border-slate-200 dark:border-slate-700 shadow-xl z-20 bg-white dark:bg-slate-800 transition-colors duration-300 print:hidden">
            <Cart 
@@ -727,6 +739,7 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={handleSaveSettings}
+        initialTab={settingsInitialTab}
       />
 
       <ExpensesModal 
@@ -746,7 +759,6 @@ const App: React.FC = () => {
         onUpdateUser={handleUpdateUser}
         currentUser={currentUser}
       />
-
     </div>
   );
 };

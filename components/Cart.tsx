@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { CartItem } from '../types';
-import { Minus, Plus, Trash2, ShoppingBag, XCircle, AlertTriangle, PenTool } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, XCircle, AlertTriangle, PenTool, ArrowRight } from 'lucide-react';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -94,73 +94,75 @@ export const Cart: React.FC<CartProps> = ({
         className={`flex-1 p-2 ${enableScroll ? 'overflow-y-auto' : 'overflow-y-hidden'}`}
         dir={enableScroll ? "rtl" : "ltr"}
       >
-        <div dir="ltr" className="h-full">
+        <div dir="ltr" className="h-full flex flex-col">
           {cartItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400 dark:text-slate-500 text-center p-8">
+            <div className="flex flex-col items-center justify-center flex-1 text-slate-400 dark:text-slate-500 text-center p-8">
               <ShoppingBag size={48} className="mb-4 opacity-20" />
               <p className="text-sm font-medium">No items in order yet.</p>
               <p className="text-xs mt-1">Select items from the menu.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 content-start">
-              {cartItems.map((item) => (
-                <div key={item.id} className="flex gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600 p-2 hover:border-brand-300 dark:hover:border-brand-600 transition-colors group relative h-full">
-                  
-                  {/* Left: Image */}
-                  <div className="w-12 h-12 rounded-md overflow-hidden bg-slate-200 dark:bg-slate-600 shrink-0 border border-slate-100 dark:border-slate-600">
-                      <img 
-                        src={item.imageUrl} 
-                        alt={item.name} 
-                        className="w-full h-full object-cover"
-                      />
-                  </div>
+            <>
+              <div className="grid grid-cols-2 gap-2 content-start pb-4">
+                {cartItems.map((item) => (
+                  <div key={item.id} className="flex gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600 p-2 hover:border-brand-300 dark:hover:border-brand-600 transition-colors group relative h-full">
+                    
+                    {/* Left: Image */}
+                    <div className="w-12 h-12 rounded-md overflow-hidden bg-slate-200 dark:bg-slate-600 shrink-0 border border-slate-100 dark:border-slate-600">
+                        <img 
+                          src={item.imageUrl} 
+                          alt={item.name} 
+                          className="w-full h-full object-cover"
+                        />
+                    </div>
 
-                  {/* Right: Details & Controls */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      {/* Name & Delete */}
-                      <div className="flex justify-between items-start gap-1">
-                        <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs leading-tight line-clamp-2" title={item.name}>
-                            {item.name}
-                        </h4>
-                        <button 
-                            onClick={() => setItemToDelete(item.id)}
-                            className="text-slate-300 hover:text-red-500 p-0.5 -mr-1 -mt-1 shrink-0"
-                            title="Remove Item"
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                      </div>
-
-                      {/* Price & Quantity Row */}
-                      <div className="flex items-end justify-between mt-1">
-                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                            ₱{(item.price * item.quantity).toFixed(0)}
-                        </span>
-
-                        {/* Quantity Control */}
-                        <div className="flex items-center bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-500 h-5 shadow-sm">
-                            <button 
-                                onClick={() => onUpdateQuantity(item.id, -1)}
-                                className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-l transition-colors"
-                                disabled={item.quantity <= 1}
-                            >
-                                <Minus size={8} />
-                            </button>
-                            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-100 px-1 min-w-[12px] text-center">
-                            {item.quantity}
-                            </span>
-                            <button 
-                                onClick={() => onUpdateQuantity(item.id, 1)}
-                                className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-r transition-colors"
-                            >
-                                <Plus size={8} />
-                            </button>
+                    {/* Right: Details & Controls */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        {/* Name & Delete */}
+                        <div className="flex justify-between items-start gap-1">
+                          <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs leading-tight line-clamp-2" title={item.name}>
+                              {item.name}
+                          </h4>
+                          <button 
+                              onClick={() => setItemToDelete(item.id)}
+                              className="text-slate-300 hover:text-red-500 p-0.5 -mr-1 -mt-1 shrink-0"
+                              title="Remove Item"
+                          >
+                              <Trash2 size={14} />
+                          </button>
                         </div>
-                      </div>
+
+                        {/* Price & Quantity Row */}
+                        <div className="flex items-end justify-between mt-1">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                              ₱{(item.price * item.quantity).toFixed(0)}
+                          </span>
+
+                          {/* Quantity Control */}
+                          <div className="flex items-center bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-500 h-5 shadow-sm">
+                              <button 
+                                  onClick={() => onUpdateQuantity(item.id, -1)}
+                                  className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-l transition-colors"
+                                  disabled={item.quantity <= 1}
+                              >
+                                  <Minus size={8} />
+                              </button>
+                              <span className="text-[10px] font-bold text-slate-800 dark:text-slate-100 px-1 min-w-[12px] text-center">
+                              {item.quantity}
+                              </span>
+                              <button 
+                                  onClick={() => onUpdateQuantity(item.id, 1)}
+                                  className="w-5 h-full flex items-center justify-center text-slate-500 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-r transition-colors"
+                              >
+                                  <Plus size={8} />
+                              </button>
+                          </div>
+                        </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -225,6 +227,7 @@ export const Cart: React.FC<CartProps> = ({
           className={`w-full py-3 rounded-xl font-bold shadow-lg shadow-slate-200 dark:shadow-none transition-all active:scale-[0.98] flex justify-center items-center gap-2 mt-2 text-sm text-white ${isEditing ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-900 dark:bg-brand-600 hover:bg-slate-800 dark:hover:bg-brand-700'} disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed`}
         >
           {isEditing ? 'Update Order' : 'Pay Now'}
+          <ArrowRight size={18} />
         </button>
       </div>
 

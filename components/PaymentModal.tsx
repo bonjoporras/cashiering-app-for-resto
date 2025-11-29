@@ -33,12 +33,162 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [cashReceived, setCashReceived] = useState<string>('');
   const [step, setStep] = useState<'payment' | 'receipt'>('payment');
 
+  // Local state to persist order details for receipt after parent cart is cleared
+  const [finalCartItems, setFinalCartItems] = useState<CartItem[]>([]);
+  const [finalTotal, setFinalTotal] = useState(0);
+  const [finalSubtotal, setFinalSubtotal] = useState(0);
+  const [finalDiscountValue, setFinalDiscountValue] = useState(0);
+  const [finalDiscountType, setFinalDiscountType] = useState<'percent' | 'fixed'>('fixed');
+
+  // Sync props to local state while in payment step
+  useEffect(() => {
+    if (isOpen && step === 'payment') {
+      setFinalCartItems(cartItems);
+      setFinalTotal(total);
+      setFinalSubtotal(subtotal);
+      setFinalDiscountValue(discountValue);
+      setFinalDiscountType(discountType);
+    }
+  }, [isOpen, step, cartItems, total, subtotal, discountValue, discountType]);
+
   useEffect(() => {
     if (isOpen) {
       setStep('payment');
       setCashReceived('');
     }
   }, [isOpen]);
+
+  // Use these variables for display/printing to handle both steps correctly
+  const displayItems = step === 'receipt' ? finalCartItems : cartItems;
+  const displayTotal = step === 'receipt' ? finalTotal : total;
+  const displaySubtotal = step === 'receipt' ? finalSubtotal : subtotal;
+  const displayDiscountValue = step === 'receipt' ? finalDiscountValue : discountValue;
+  const displayDiscountType = step === 'receipt' ? finalDiscountType : discountType;
+
+  // Common Receipt Generator Function
+  const generateReceiptContent = (isOfficial: boolean) => {
+    const received = parseFloat(cashReceived) || 0;
+    const changeAmount = received - displayTotal;
+    
+    let discountAmount = 0;
+    if (displayDiscountType === 'percent') {
+        discountAmount = displaySubtotal * (displayDiscountValue / 100);
+    } else {
+        discountAmount = displayDiscountValue;
+    }
+
+    return `
+      <html>
+          <head>
+              <title>${isOfficial ? 'Receipt' : 'Order Summary'} - ${customerName}</title>
+              <style>
+                  body { 
+                      font-family: 'Courier New', Courier, monospace; 
+                      width: 56mm; 
+                      margin: 0;
+                      padding: 5px; 
+                      font-size: 11px;
+                      line-height: 1.2;
+                      color: #000;
+                  }
+                  .text-center { text-align: center; }
+                  .text-right { text-align: right; }
+                  .flex-between { display: flex; justify-content: space-between; }
+                  .bold { font-weight: bold; }
+                  .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
+                  .border-top { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                  .item-row { margin-bottom: 3px; }
+                  .item-details { font-size: 10px; padding-left: 5px; display: flex; justify-content: space-between; }
+                  table { width: 100%; border-collapse: collapse; }
+                  td { vertical-align: top; }
+                  @media print {
+                      body { padding: 0; margin: 0; width: 56mm; }
+                      @page { margin: 0; size: 58mm auto; }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="text-center border-bottom">
+                  ${isOfficial && settings.appLogo !== 'default' ? `<img src="${settings.appLogo}" style="height: 40px; margin-bottom: 5px; filter: grayscale(100%);" />` : ''}
+                  <div class="bold" style="font-size: 14px;">${settings.appName}</div>
+                  <div>${isOfficial ? 'OFFICIAL RECEIPT' : 'ORDER SUMMARY'}</div>
+              </div>
+              
+              <div class="border-bottom">
+                  <div class="flex-between"><span>Date:</span><span>${new Date().toLocaleDateString()}</span></div>
+                  <div class="flex-between"><span>Time:</span><span>${new Date().toLocaleTimeString()}</span></div>
+                  <div style="margin-top: 4px; padding-top: 4px; border-top: 1px dotted #000;">
+                    Customer: <span class="bold">${customerName}</span>
+                  </div>
+              </div>
+
+              <div class="border-bottom">
+                  <div class="text-center bold" style="margin-bottom: 5px; border-bottom: 1px solid #000; padding-bottom: 2px;">ORDER SUMMARY</div>
+                  <table>
+                  ${displayItems.map(item => `
+                      <tr>
+                          <td colspan="2" style="padding-top: 2px;">${item.name}</td>
+                      </tr>
+                      <tr>
+                          <td style="padding-left: 10px; font-size: 10px;">${item.quantity} x ${item.price.toFixed(2)}</td>
+                          <td class="text-right" style="font-size: 10px;">${(item.price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                  `).join('')}
+                  </table>
+              </div>
+              
+              <div class="border-bottom">
+                   <div class="flex-between">
+                      <span>Subtotal</span>
+                      <span>${displaySubtotal.toFixed(2)}</span>
+                   </div>
+                   ${displayDiscountValue > 0 ? `
+                   <div class="flex-between">
+                      <span>Discount (${displayDiscountType === 'percent' ? displayDiscountValue + '%' : 'Fixed'})</span>
+                      <span>-${discountAmount.toFixed(2)}</span>
+                   </div>
+                   ` : ''}
+              </div>
+
+              <div class="border-bottom bold">
+                   <div class="flex-between" style="font-size: 14px;">
+                      <span>TOTAL</span>
+                      <span>${displayTotal.toFixed(2)}</span>
+                   </div>
+              </div>
+              
+              ${(isOfficial || received > 0) ? `
+              <div class="border-bottom">
+                   <div class="flex-between">
+                      <span>Cash</span>
+                      <span>${received.toFixed(2)}</span>
+                   </div>
+                   <div class="flex-between">
+                      <span>Change</span>
+                      <span>${Math.max(0, changeAmount).toFixed(2)}</span>
+                   </div>
+              </div>
+              ` : ''}
+              
+              <div class="text-center" style="font-size: 9px; margin-top: 10px;">
+                  ${isOfficial ? `
+                  <p>Thank you for your business!</p>
+                  <p>POS: ${settings.appName}</p>
+                  ` : `
+                  <p>-- Summary Only --</p>
+                  `}
+              </div>
+          </body>
+          <script>
+              window.onload = function() {
+                  setTimeout(function() { 
+                      window.print(); 
+                  }, 500);
+              };
+          </script>
+      </html>
+    `;
+  };
 
   // Handle Print Summary (formerly Export logic)
   const handlePrintSummary = async () => {
@@ -53,11 +203,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const sanitizedCustomer = customerName.replace(/[^a-z0-9]/gi, '_');
     const filename = `Receipt-${sanitizedCustomer}-${dateFilename}-${timeFilename}.txt`;
 
+    const received = parseFloat(cashReceived) || 0;
+    const changeAmount = received - displayTotal;
+
     let discountAmount = 0;
-    if (discountType === 'percent') {
-        discountAmount = subtotal * (discountValue / 100);
+    if (displayDiscountType === 'percent') {
+        discountAmount = displaySubtotal * (displayDiscountValue / 100);
     } else {
-        discountAmount = discountValue;
+        discountAmount = displayDiscountValue;
     }
 
     let content = `${settings.appName.toUpperCase()}\n`;
@@ -67,17 +220,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     content += `Customer: ${customerName}\n`;
     content += `${line}\n`;
 
-    cartItems.forEach(item => {
+    displayItems.forEach(item => {
       content += `${item.name}\n`;
-      content += `${item.quantity} x ${item.price.toFixed(2)} = ${(item.price * item.quantity).toFixed(2)}\n`;
+      content += `  ${item.quantity} x ${item.price.toFixed(2)} = ${(item.price * item.quantity).toFixed(2)}\n`;
     });
 
     content += `${line}\n`;
-    content += `Subtotal: ${subtotal.toFixed(2)}\n`;
-    if (discountValue > 0) {
-        content += `Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'}): -${discountAmount.toFixed(2)}\n`;
+    content += `Subtotal: ${displaySubtotal.toFixed(2)}\n`;
+    if (displayDiscountValue > 0) {
+        content += `Discount (${displayDiscountType === 'percent' ? displayDiscountValue + '%' : 'Fixed'}): -${discountAmount.toFixed(2)}\n`;
     }
-    content += `TOTAL: ${total.toFixed(2)}\n`;
+    content += `TOTAL: ${displayTotal.toFixed(2)}\n`;
+    
+    if (received > 0) {
+      content += `Cash: ${received.toFixed(2)}\n`;
+      content += `Change: ${Math.max(0, changeAmount).toFixed(2)}\n`;
+    }
+    
     content += `${line}\n`;
 
     // 1. Trigger Save/Download
@@ -112,209 +271,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         console.log("Save cancelled or failed:", err);
     }
 
-    // 2. Open in new window and Automatic Print (Formatted for 56mm)
+    // 2. Open in new window and Automatic Print
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>Order Summary - ${customerName}</title>
-                    <style>
-                        body { 
-                            font-family: 'Courier New', Courier, monospace; 
-                            width: 56mm; 
-                            margin: 0;
-                            padding: 5px; 
-                            font-size: 11px;
-                            line-height: 1.2;
-                            color: #000;
-                        }
-                        .text-center { text-align: center; }
-                        .text-right { text-align: right; }
-                        .flex-between { display: flex; justify-content: space-between; }
-                        .bold { font-weight: bold; }
-                        .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
-                        .border-top { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
-                        .item-row { margin-bottom: 3px; }
-                        .item-details { font-size: 10px; padding-left: 5px; display: flex; justify-content: space-between; }
-                        @media print {
-                            body { padding: 0; margin: 0; width: 56mm; }
-                            @page { margin: 0; size: 58mm auto; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="text-center border-bottom">
-                        <div class="bold" style="font-size: 14px;">${settings.appName}</div>
-                        <div>ORDER SUMMARY</div>
-                    </div>
-                    
-                    <div class="border-bottom">
-                        <div class="flex-between"><span>Date:</span><span>${new Date().toLocaleDateString()}</span></div>
-                        <div class="flex-between"><span>Time:</span><span>${new Date().toLocaleTimeString()}</span></div>
-                        <div>Customer: <span class="bold">${customerName}</span></div>
-                    </div>
-
-                    <div class="border-bottom">
-                        ${cartItems.map(item => `
-                            <div class="item-row">
-                                <div>${item.name}</div>
-                                <div class="item-details">
-                                    <span>${item.quantity} x ${item.price.toFixed(2)}</span>
-                                    <span>${(item.price * item.quantity).toFixed(2)}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <div class="border-bottom">
-                         <div class="flex-between">
-                            <span>Subtotal</span>
-                            <span>${subtotal.toFixed(2)}</span>
-                         </div>
-                         ${discountValue > 0 ? `
-                         <div class="flex-between">
-                            <span>Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'})</span>
-                            <span>-${discountAmount.toFixed(2)}</span>
-                         </div>
-                         ` : ''}
-                    </div>
-
-                    <div class="border-bottom bold">
-                         <div class="flex-between" style="font-size: 14px;">
-                            <span>TOTAL</span>
-                            <span>${total.toFixed(2)}</span>
-                         </div>
-                    </div>
-                    
-                    <div class="text-center" style="font-size: 9px; margin-top: 10px;">
-                        -- Summary Only --
-                    </div>
-                </body>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() { 
-                            window.print(); 
-                        }, 500);
-                    };
-                </script>
-            </html>
-        `);
+        printWindow.document.write(generateReceiptContent(false));
         printWindow.document.close();
     }
   };
 
   const handlePrintReceipt = () => {
-    const received = parseFloat(cashReceived) || 0;
-    const changeAmount = received - total;
-
-    let discountAmount = 0;
-    if (discountType === 'percent') {
-        discountAmount = subtotal * (discountValue / 100);
-    } else {
-        discountAmount = discountValue;
-    }
-
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>Receipt - ${customerName}</title>
-                    <style>
-                        body { 
-                            font-family: 'Courier New', Courier, monospace; 
-                            width: 56mm; 
-                            margin: 0;
-                            padding: 5px; 
-                            font-size: 11px;
-                            line-height: 1.2;
-                            color: #000;
-                        }
-                        .text-center { text-align: center; }
-                        .text-right { text-align: right; }
-                        .flex-between { display: flex; justify-content: space-between; }
-                        .bold { font-weight: bold; }
-                        .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
-                        .border-top { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
-                        .item-row { margin-bottom: 3px; }
-                        .item-details { font-size: 10px; padding-left: 5px; display: flex; justify-content: space-between; }
-                        @media print {
-                            body { padding: 0; margin: 0; width: 56mm; }
-                            @page { margin: 0; size: 58mm auto; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="text-center border-bottom">
-                        ${settings.appLogo !== 'default' ? `<img src="${settings.appLogo}" style="height: 40px; margin-bottom: 5px; filter: grayscale(100%);" />` : ''}
-                        <div class="bold" style="font-size: 14px;">${settings.appName}</div>
-                        <div>OFFICIAL RECEIPT</div>
-                    </div>
-                    
-                    <div class="border-bottom">
-                        <div class="flex-between"><span>Date:</span><span>${new Date().toLocaleDateString()}</span></div>
-                        <div class="flex-between"><span>Time:</span><span>${new Date().toLocaleTimeString()}</span></div>
-                        <div>Customer: <span class="bold">${customerName}</span></div>
-                    </div>
-
-                    <div class="border-bottom">
-                        ${cartItems.map(item => `
-                            <div class="item-row">
-                                <div>${item.name}</div>
-                                <div class="item-details">
-                                    <span>${item.quantity} x ${item.price.toFixed(2)}</span>
-                                    <span>${(item.price * item.quantity).toFixed(2)}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    
-                    <div class="border-bottom">
-                         <div class="flex-between">
-                            <span>Subtotal</span>
-                            <span>${subtotal.toFixed(2)}</span>
-                         </div>
-                         ${discountValue > 0 ? `
-                         <div class="flex-between">
-                            <span>Discount (${discountType === 'percent' ? discountValue + '%' : 'Fixed'})</span>
-                            <span>-${discountAmount.toFixed(2)}</span>
-                         </div>
-                         ` : ''}
-                    </div>
-
-                    <div class="border-bottom bold">
-                         <div class="flex-between" style="font-size: 14px;">
-                            <span>TOTAL</span>
-                            <span>${total.toFixed(2)}</span>
-                         </div>
-                    </div>
-                    
-                    <div class="border-bottom">
-                         <div class="flex-between">
-                            <span>Cash</span>
-                            <span>${received.toFixed(2)}</span>
-                         </div>
-                         <div class="flex-between">
-                            <span>Change</span>
-                            <span>${Math.max(0, changeAmount).toFixed(2)}</span>
-                         </div>
-                    </div>
-                    
-                    <div class="text-center" style="font-size: 9px; margin-top: 10px;">
-                        <p>Thank you for your business!</p>
-                        <p>POS: ${settings.appName}</p>
-                    </div>
-                </body>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() { 
-                            window.print(); 
-                        }, 500);
-                    };
-                </script>
-            </html>
-        `);
+        printWindow.document.write(generateReceiptContent(true));
         printWindow.document.close();
     }
   };
@@ -338,7 +306,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, step, cartItems, total, customerName, settings, cashReceived]);
+  }, [isOpen, step, displayItems, displayTotal, customerName, settings, cashReceived]);
 
   // Function to generate a Bell "Ting" sound using Web Audio API
   const playBellSound = () => {
@@ -371,6 +339,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handlePayment = () => {
+    // Note: We don't need to explicitly save state here because useEffect
+    // keeps final* vars updated as long as step === 'payment'.
+    // Changing step to 'receipt' stops the updates, preserving the snapshot.
     onConfirmPayment();
     setStep('receipt');
 
@@ -390,8 +361,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   if (!isOpen) return null;
 
   const receivedAmount = parseFloat(cashReceived) || 0;
-  const change = receivedAmount - total;
-  const canPay = receivedAmount >= total;
+  const change = receivedAmount - displayTotal;
+  const canPay = receivedAmount >= displayTotal;
+
+  let discountAmount = 0;
+  if (displayDiscountType === 'percent') {
+    discountAmount = displaySubtotal * (displayDiscountValue / 100);
+  } else {
+    discountAmount = displayDiscountValue;
+  }
 
   return (
     <>
@@ -433,6 +411,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                           <span className="hidden sm:inline">Print</span>
                         </button>
                       </div>
+                   </div>
+
+                   {/* Customer Name Display */}
+                   <div className="mb-3 px-3 py-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Customer</span>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">{customerName}</span>
                    </div>
 
                    <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[220px] scrollbar-hide">
@@ -531,33 +515,72 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-center space-y-6 py-8">
-                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                  <CheckCircle size={40} />
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white">Payment Successful!</h3>
-                  <p className="text-slate-500 dark:text-slate-400">Change given: <span className="font-bold text-slate-800 dark:text-white">₱{Math.max(0, change).toFixed(2)}</span></p>
-                </div>
+              <div className="flex flex-col h-full">
+                  <div className="text-center py-6 shrink-0">
+                    <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-3 animate-bounce">
+                      <CheckCircle size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-white">Payment Successful</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">Change: <span className="font-bold text-slate-800 dark:text-white">₱{Math.max(0, change).toFixed(2)}</span></p>
+                  </div>
 
-                <div className="flex gap-3 justify-center max-w-sm mx-auto">
-                    <button
-                        onClick={handlePrintReceipt}
-                        className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                        title="Print Receipt (Cmd+P / Ctrl+P)"
-                    >
-                        <Printer size={20} /> 
-                        Receipt
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="flex-[2] bg-slate-900 dark:bg-brand-600 hover:bg-slate-800 dark:hover:bg-brand-700 text-white py-3 rounded-xl font-semibold shadow-md transition-all flex justify-center items-center gap-2"
-                    >
-                        <Plus size={20} />
-                        New Order
-                    </button>
-                </div>
+                  {/* Order Summary on Success Screen */}
+                  <div className="flex-1 overflow-y-auto px-6 mb-4">
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 border border-slate-100 dark:border-slate-700">
+                          <div className="flex justify-between items-center mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
+                             <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Order Summary</h4>
+                             <span className="text-xs font-bold text-slate-800 dark:text-white">{customerName}</span>
+                          </div>
+                          
+                          <div className="space-y-3 mb-4">
+                              {displayItems.map(item => (
+                                  <div key={item.id} className="text-sm">
+                                      <div className="flex justify-between items-start mb-0.5">
+                                          <div className="font-bold text-slate-800 dark:text-white">{item.name}</div>
+                                          <div className="font-bold text-slate-900 dark:text-white">₱{(item.price * item.quantity).toFixed(2)}</div>
+                                      </div>
+                                      <div className="text-slate-500 dark:text-slate-400 text-xs">
+                                          {item.quantity} x ₱{item.price.toFixed(2)}
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                          <div className="space-y-1 pt-3 border-t border-slate-200 dark:border-slate-700 text-sm">
+                              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                  <span>Subtotal</span>
+                                  <span>₱{displaySubtotal.toFixed(2)}</span>
+                              </div>
+                              {displayDiscountValue > 0 && (
+                                  <div className="flex justify-between text-brand-600 dark:text-brand-400">
+                                      <span>Discount</span>
+                                      <span>-₱{discountAmount.toFixed(2)}</span>
+                                  </div>
+                              )}
+                              <div className="flex justify-between font-bold text-lg text-slate-800 dark:text-white pt-2">
+                                  <span>Total</span>
+                                  <span>₱{displayTotal.toFixed(2)}</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="px-6 pb-6 shrink-0 flex gap-3">
+                      <button
+                          onClick={handlePrintReceipt}
+                          className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                          title="Print Receipt (Cmd+P / Ctrl+P)"
+                      >
+                          <Printer size={20} /> 
+                          Receipt
+                      </button>
+                      <button
+                          onClick={onClose}
+                          className="flex-[2] bg-slate-900 dark:bg-brand-600 hover:bg-slate-800 dark:hover:bg-brand-700 text-white py-3 rounded-xl font-semibold shadow-md transition-all flex justify-center items-center gap-2"
+                      >
+                          <Plus size={20} />
+                          New Order
+                      </button>
+                  </div>
               </div>
             )}
           </div>

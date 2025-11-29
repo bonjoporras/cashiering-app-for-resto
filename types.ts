@@ -49,7 +49,6 @@ export interface Customer {
   cart: CartItem[];
   discountType: 'percent' | 'fixed';
   discountValue: number;
-  aiRecommendation?: { text: string; itemIds: string[] };
   editingOrderId?: string; // ID of the order being edited/restored
 }
 

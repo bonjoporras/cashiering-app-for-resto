@@ -274,38 +274,53 @@ export const exportAllData = (prefix: string = "Database") => {
   a.href = url;
   // Format: BistroGenius_AutoBackup_2023-10-27_14-30-00.json
   a.download = `BistroGenius_${prefix}_${dateStr}_${timeStr}.json`;
+  
+  // Append to body to ensure it works in all browsers (Firefox specifically)
+  document.body.appendChild(a);
   a.click();
+  
+  // Cleanup
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
 
 export const importAllData = async (file: File): Promise<boolean> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    
     reader.onload = (e) => {
       try {
         const json = e.target?.result as string;
+        if (!json) throw new Error("File is empty");
+        
         const backup: DatabaseBackup = JSON.parse(json);
 
-        // Basic validation
-        if (!backup.data || !backup.version) {
-          throw new Error("Invalid backup file format");
+        // Basic validation - lenient check for at least 'data' property
+        if (!backup.data || typeof backup.data !== 'object') {
+          throw new Error("Invalid backup file format: Missing data object");
         }
 
-        // Restore Data
-        localStorage.setItem(ORDERS_KEY, JSON.stringify(backup.data.orders || []));
-        localStorage.setItem(PRODUCTS_KEY, JSON.stringify(backup.data.products || []));
-        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(backup.data.categories || []));
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(backup.data.settings || DEFAULT_SETTINGS));
-        localStorage.setItem(EXPENSES_KEY, JSON.stringify(backup.data.expenses || []));
-        localStorage.setItem(USERS_KEY, JSON.stringify(backup.data.users || []));
-        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(backup.data.customers || []));
+        // Restore Data (with safe defaults if keys are missing in older backups)
+        if (backup.data.orders) localStorage.setItem(ORDERS_KEY, JSON.stringify(backup.data.orders));
+        if (backup.data.products) localStorage.setItem(PRODUCTS_KEY, JSON.stringify(backup.data.products));
+        if (backup.data.categories) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(backup.data.categories));
+        if (backup.data.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(backup.data.settings));
+        if (backup.data.expenses) localStorage.setItem(EXPENSES_KEY, JSON.stringify(backup.data.expenses));
+        if (backup.data.users) localStorage.setItem(USERS_KEY, JSON.stringify(backup.data.users));
+        if (backup.data.customers) localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(backup.data.customers));
 
         resolve(true);
       } catch (error) {
-        console.error("Import failed", error);
+        console.error("Import failed:", error);
         resolve(false);
       }
     };
+    
+    reader.onerror = (e) => {
+      console.error("FileReader error:", e);
+      resolve(false);
+    };
+
     reader.readAsText(file);
   });
 };
